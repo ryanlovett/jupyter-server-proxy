@@ -9,7 +9,7 @@ import pkg_resources
 from collections import namedtuple
 from .utils import call_with_asked_args
 
-def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port):
+def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port, proxy_headers):
     """
     Create a SuperviseAndProxyHandler subclass with given parameters
     """
@@ -43,17 +43,20 @@ def _make_serverproxy_handler(name, command, environment, timeout, absolute_url,
             else:
                 raise ValueError('Value of unrecognized type {}'.format(type(value)))
 
+        def _realize_rendered_template(self, attribute):
+            if callable(attribute):
+                attribute = self._render_template(call_with_asked_args(attribute, self.process_args))
+            return self._render_template(attribute)
+
         def get_cmd(self):
-            if callable(command):
-                return self._render_template(call_with_asked_args(command, self.process_args))
-            else:
-                return self._render_template(command)
+            return self._realize_rendered_template(command)
 
         def get_env(self):
-            if callable(environment):
-                return self._render_template(call_with_asked_args(environment, self.process_args))
-            else:
-                return self._render_template(environment)
+            return self._realize_rendered_template(environment)
+
+        def proxy_request_headers(self):
+            '''Implements method from LocalProxyHandler>ProxyHandler.'''
+            return self._realize_rendered_template(proxy_headers)
 
         def get_timeout(self):
             return timeout
@@ -82,6 +85,7 @@ def make_handlers(base_url, server_processes):
             sp.timeout,
             sp.absolute_url,
             sp.port,
+            sp.proxy_headers,
         )
         handlers.append((
             ujoin(base_url, sp.name, r'(.*)'), handler, dict(state={}),
@@ -93,7 +97,7 @@ def make_handlers(base_url, server_processes):
 
 LauncherEntry = namedtuple('LauncherEntry', ['enabled', 'icon_path', 'title'])
 ServerProcess = namedtuple('ServerProcess', [
-    'name', 'command', 'environment', 'timeout', 'absolute_url', 'port', 'launcher_entry'])
+    'name', 'command', 'environment', 'timeout', 'absolute_url', 'port', 'proxy_headers', 'launcher_entry'])
 
 def make_server_process(name, server_process_config):
     le = server_process_config.get('launcher_entry', {})
@@ -104,6 +108,7 @@ def make_server_process(name, server_process_config):
         timeout=server_process_config.get('timeout', 5),
         absolute_url=server_process_config.get('absolute_url', False),
         port=server_process_config.get('port', 0),
+        proxy_headers=server_process_config.get('proxy_headers', {}),
         launcher_entry=LauncherEntry(
             enabled=le.get('enabled', True),
             icon_path=le.get('icon_path'),
@@ -129,8 +134,8 @@ class ServerProxy(Configurable):
             Could also be a callable. It should return a dictionary.
 
           environment
-            A dictionary of environment variable mappings. {{port}} and {{base_url}} will be
-            substituted as for command.
+            A dictionary of environment variable mappings. As with the command
+            traitlet, {{port}} and {{base_url}} will be substituted.
 
             Could also be a callable. It should return a dictionary.
 
@@ -143,6 +148,11 @@ class ServerProxy(Configurable):
 
           port
             Set the port that the service will listen on. The default is to automatically select an unused port.
+
+          proxy_headers
+            A dictionary of additional HTTP headers for the proxy request.
+            As with the command traitlet, {{port}} and {{base_url}} will be
+            substituted.
 
           launcher_entry
             A dictionary of various options for entries in classic notebook / jupyterlab launchers.
