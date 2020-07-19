@@ -44,6 +44,10 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         self.proxy_base = ''
         self.absolute_url = kwargs.pop('absolute_url', False)
         self.host_whitelist = kwargs.pop('host_whitelist', ['localhost', '127.0.0.1'])
+        self.rewrite_response = kwargs.pop(
+            'rewrite_response',
+            lambda host, port, path, response: response.body
+        )
         self.subprotocols = None
         super().__init__(*args, **kwargs)
 
@@ -257,7 +261,10 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
                     self.add_header(header, v)
 
             if response.body:
-                self.write(response.body)
+                # Note: self.rewrite_response is defined as
+                #   lambda host, port, path, response: response.body
+                # unless overridden in configuration.
+                self.write(self.rewrite_response(host, port, proxied_path, response))
 
     async def proxy_open(self, host, port, proxied_path=''):
         """
@@ -567,6 +574,7 @@ class SuperviseAndProxyHandler(LocalProxyHandler):
 
 def setup_handlers(web_app, serverproxy_config):
     host_whitelist = serverproxy_config.host_whitelist
+    rewrite_response = serverproxy_config.non_service_rewrite_response
     web_app.add_handlers('.*', [
         (
             url_path_join(
@@ -577,6 +585,7 @@ def setup_handlers(web_app, serverproxy_config):
             {
                 'absolute_url': False,
                 'host_whitelist': host_whitelist,
+                'rewrite_response': rewrite_response,
             }
         ),
         (
@@ -588,6 +597,7 @@ def setup_handlers(web_app, serverproxy_config):
             {
                 'absolute_url': True,
                 'host_whitelist': host_whitelist,
+                'rewrite_response': rewrite_response,
             }
         ),
         (
@@ -598,6 +608,7 @@ def setup_handlers(web_app, serverproxy_config):
             LocalProxyHandler,
             {
                 'absolute_url': False,
+                'rewrite_response': rewrite_response,
             }
         ),
         (
@@ -608,6 +619,7 @@ def setup_handlers(web_app, serverproxy_config):
             LocalProxyHandler,
             {
                 'absolute_url': True,
+                'rewrite_response': rewrite_response,
             }
         ),
     ])

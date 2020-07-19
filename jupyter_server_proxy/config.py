@@ -15,7 +15,7 @@ try:
 except ImportError:
     from .utils import Callable
 
-def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port, mappath):
+def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port, mappath, rewrite_response):
     """
     Create a SuperviseAndProxyHandler subclass with given parameters
     """
@@ -28,6 +28,7 @@ def _make_serverproxy_handler(name, command, environment, timeout, absolute_url,
             self.absolute_url = absolute_url
             self.requested_port = port
             self.mappath = mappath
+            self.rewrite_response = rewrite_response
 
         @property
         def process_args(self):
@@ -92,6 +93,7 @@ def make_handlers(base_url, server_processes):
             sp.absolute_url,
             sp.port,
             sp.mappath,
+            sp.rewrite_response,
         )
         handlers.append((
             ujoin(base_url, sp.name, r'(.*)'), handler, dict(state={}),
@@ -104,7 +106,7 @@ def make_handlers(base_url, server_processes):
 LauncherEntry = namedtuple('LauncherEntry', ['enabled', 'icon_path', 'title'])
 ServerProcess = namedtuple('ServerProcess', [
     'name', 'command', 'environment', 'timeout', 'absolute_url', 'port',
-    'mappath', 'launcher_entry', 'new_browser_tab',
+    'mappath', 'launcher_entry', 'new_browser_tab', 'rewrite_response',
 ])
 
 def make_server_process(name, server_process_config, serverproxy_config):
@@ -123,6 +125,10 @@ def make_server_process(name, server_process_config, serverproxy_config):
             title=le.get('title', name)
         ),
         new_browser_tab=server_process_config.get('new_browser_tab', True),
+        rewrite_response=server_process_config.get(
+            'rewrite_response',
+            lambda host, port, path, response: response.body
+        ),
     )
 
 class ServerProxy(Configurable):
@@ -182,6 +188,29 @@ class ServerProxy(Configurable):
           new_browser_tab
             Set to True (default) to make the proxied server interface opened as a new browser tab. Set to False
             to have it open a new JupyterLab tab. This has no effect in classic notebook.
+
+          rewrite_response
+            An optional function to rewrite the response for the given service.
+            Input arguments are ``host`` which is ``"localhost"``, the service
+            port ``port``, the ``path`` from the requested URL, and
+            ``response`` is a `tornado.httpclient.HTTPResponse object
+            <https://www.tornadoweb.org/en/stable/httpclient.html#response-objects>`.
+            Output is bytes.
+            Defaults to ``lambda host, port, path, response: response.body``.
+        """,
+        config=True
+    )
+
+    non_service_rewrite_response = Callable(
+        lambda host, port, path, response: response.body,
+        help="""
+        A function to rewrite the response for a non-service request, for
+        example a request to ``/proxy/<host>:<port><path>``. Input arguments
+        ``host``, ``port``, and ``path`` come from the requested URL, and
+        "response" is a `tornado.httpclient.HTTPResponse object
+        <https://www.tornadoweb.org/en/stable/httpclient.html#response-objects>`.
+        Output is bytes.
+        Defaults to ``lambda host, port, path, response: response.body``.
         """,
         config=True
     )
