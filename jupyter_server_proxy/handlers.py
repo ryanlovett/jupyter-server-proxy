@@ -222,6 +222,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         req = self._build_proxy_request(host, port, proxied_path, body)
 
         try:
+            # Here, "response" is a tornado.httpclient.HTTPResponse object.
             response = await client.fetch(req, raise_error=False)
         except httpclient.HTTPError as err:
             # We need to capture the timeout error even with raise_error=False,
@@ -354,6 +355,10 @@ class LocalProxyHandler(ProxyHandler):
     A tornado request handler that proxies HTTP and websockets
     from a port on the local system. Same as the above ProxyHandler,
     but specific to 'localhost'.
+
+    The arguments "port" and "proxied_path" in each method are extracted from
+    the URL as capture groups in the regex specified in the add_handlers
+    method.
     """
     async def http_get(self, port, proxied_path):
         return await self.proxy(port, proxied_path)
@@ -387,6 +392,10 @@ class RemoteProxyHandler(ProxyHandler):
     """
     A tornado request handler that proxies HTTP and websockets
     from a port on a specified remote system.
+
+    The arguments "host", "port" and "proxied_path" in each method are
+    extracted from the URL as capture groups in the regex specified in the
+    add_handlers method.
     """
 
     async def http_get(self, host, port, proxied_path):
@@ -559,14 +568,47 @@ class SuperviseAndProxyHandler(LocalProxyHandler):
 def setup_handlers(web_app, host_whitelist):
     host_pattern = '.*$'
     web_app.add_handlers('.*', [
-        (url_path_join(web_app.settings['base_url'], r'/proxy/(.*):(\d+)(.*)'),
-         RemoteProxyHandler, {'absolute_url': False, 'host_whitelist': host_whitelist}),
-        (url_path_join(web_app.settings['base_url'], r'/proxy/absolute/(.*):(\d+)(.*)'),
-         RemoteProxyHandler, {'absolute_url': True, 'host_whitelist': host_whitelist}),
-        (url_path_join(web_app.settings['base_url'], r'/proxy/(\d+)(.*)'),
-         LocalProxyHandler, {'absolute_url': False}),
-        (url_path_join(web_app.settings['base_url'], r'/proxy/absolute/(\d+)(.*)'),
-         LocalProxyHandler, {'absolute_url': True}),
+        (
+            url_path_join(
+                web_app.settings['base_url'],
+                r'/proxy/(.*):(\d+)(.*)',
+            ),
+            RemoteProxyHandler,
+            {
+                'absolute_url': False,
+                'host_whitelist': host_whitelist,
+            }
+        ),
+        (
+            url_path_join(
+                web_app.settings['base_url'],
+                r'/proxy/absolute/(.*):(\d+)(.*)'
+            ),
+            RemoteProxyHandler,
+            {
+                'absolute_url': True,
+                'host_whitelist': host_whitelist,
+            }
+        ),
+        (
+            url_path_join(
+                web_app.settings['base_url'],
+                r'/proxy/(\d+)(.*)'),
+            LocalProxyHandler,
+            {
+                'absolute_url': False,
+            }
+        ),
+        (
+            url_path_join(
+                web_app.settings['base_url'],
+                r'/proxy/absolute/(\d+)(.*)',
+            ),
+            LocalProxyHandler,
+            {
+                'absolute_url': True,
+            }
+        ),
     ])
 
 # vim: set et ts=4 sw=4:
