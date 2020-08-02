@@ -44,6 +44,13 @@ def test_server_proxy_minimal_proxy_path_encoding_complement():
     assert 'GET /{}?token='.format(test_url) in s
 
 
+def test_server_rewrite_response():
+    r = request_get(PORT, '/python-http/ciao-a-tutti', TOKEN)
+    assert r.code == 200
+    s = r.read().decode('ascii')
+    assert s.startswith('GET /hello-a-tutti?token=')
+
+
 def test_server_proxy_non_absolute():
     r = request_get(PORT, '/python-http/abc', TOKEN)
     assert r.code == 200
@@ -90,6 +97,14 @@ def test_server_proxy_port_absolute():
     assert s.startswith('GET /proxy/absolute/54321/nmo?token=')
     assert 'X-Forwarded-Context' not in s
     assert 'X-Proxycontextpath' not in s
+
+
+def test_server_proxy_port_non_service_rewrite_response():
+    """Test that 'bar' is replaced by 'foo'."""
+    r = request_get(PORT, '/proxy/54321/baz-bar-foo', TOKEN)
+    assert r.code == 200
+    s = r.read().decode('ascii')
+    assert s.startswith('GET /baz-foo-foo?token=')
 
 
 @pytest.mark.parametrize(
