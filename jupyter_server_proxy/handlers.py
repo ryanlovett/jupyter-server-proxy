@@ -130,6 +130,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         - {base_url}/{proxy_base}
         """
         host_and_port = str(port) if host == 'localhost' else host + ":" + str(port)
+        self.log.debug(f"_get_context_path: {host_and_port}")
         if self.proxy_base:
             return url_path_join(self.base_url, self.proxy_base)
         if self.absolute_url:
@@ -162,11 +163,13 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         if self.request.query:
             client_uri += '?' + self.request.query
 
+        self.log.debug(f"get_client_uri: {client_uri}")
         return client_uri
 
     def _build_proxy_request(self, host, port, proxied_path, body):
 
         headers = self.proxy_request_headers()
+        self.log.debug(f"_build_proxy_request: {headers}")
 
         client_uri = self.get_client_uri('http', host, port, proxied_path)
         # Some applications check X-Forwarded-Context and X-ProxyContextPath
