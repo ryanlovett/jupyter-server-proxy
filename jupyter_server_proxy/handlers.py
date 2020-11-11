@@ -47,6 +47,15 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         self.subprotocols = None
         super().__init__(*args, **kwargs)
 
+    def log(self, msg):
+        '''Because we can't get at the log on binder.'''
+        super().log(msg)
+        f = open('/tmp/proxy.log', 'a')
+        f.write(msg)
+        f.write('\n')
+        f.flush()
+        f.close()
+
     # Support all the methods that tornado does by default except for GET which
     # is passed to WebSocketHandlerMixin and then to WebSocketHandler.
 
