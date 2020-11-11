@@ -20,6 +20,14 @@ from .utils import call_with_asked_args
 from .websocket import WebSocketHandlerMixin, pingable_ws_connect
 from simpervisor import SupervisedProcess
 
+def mylog(msg):
+    '''Because we can't get at the log on binder.'''
+    f = open('/tmp/proxy.log', 'a')
+    f.write(msg)
+    f.write('\n')
+    f.flush()
+    f.close()
+
 
 class AddSlashHandler(IPythonHandler):
     """Add trailing slash to URLs that need them."""
@@ -46,15 +54,6 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         self.host_whitelist = kwargs.pop('host_whitelist', ['localhost', '127.0.0.1'])
         self.subprotocols = None
         super().__init__(*args, **kwargs)
-
-    def log(self, msg):
-        '''Because we can't get at the log on binder.'''
-        super().log(msg)
-        f = open('/tmp/proxy.log', 'a')
-        f.write(msg)
-        f.write('\n')
-        f.flush()
-        f.close()
 
     # Support all the methods that tornado does by default except for GET which
     # is passed to WebSocketHandlerMixin and then to WebSocketHandler.
@@ -139,7 +138,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         - {base_url}/{proxy_base}
         """
         host_and_port = str(port) if host == 'localhost' else host + ":" + str(port)
-        self.log.debug(f"_get_context_path: {host_and_port}")
+        mylog(f"_get_context_path: {host_and_port}")
         if self.proxy_base:
             return url_path_join(self.base_url, self.proxy_base)
         if self.absolute_url:
@@ -172,13 +171,13 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         if self.request.query:
             client_uri += '?' + self.request.query
 
-        self.log.debug(f"get_client_uri: {client_uri}")
+        mylog(f"get_client_uri: {client_uri}")
         return client_uri
 
     def _build_proxy_request(self, host, port, proxied_path, body):
 
         headers = self.proxy_request_headers()
-        self.log.debug(f"_build_proxy_request: {headers}")
+        mylog(f"_build_proxy_request: {headers}")
 
         client_uri = self.get_client_uri('http', host, port, proxied_path)
         # Some applications check X-Forwarded-Context and X-ProxyContextPath
