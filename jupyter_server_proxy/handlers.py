@@ -189,7 +189,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
             headers['X-Forwarded-Prefix'] = context_path
 
         mylog("_build_proxy_request: headers:")
-        mylog(headers)
+        mylog(str(headers))
 
         req = httpclient.HTTPRequest(
             client_uri, method=self.request.method, body=body,
