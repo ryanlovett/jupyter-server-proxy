@@ -28,7 +28,6 @@ def mylog(msg):
     f.flush()
     f.close()
 
-
 class AddSlashHandler(IPythonHandler):
     """Add trailing slash to URLs that need them."""
     @web.authenticated
@@ -177,17 +176,20 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
     def _build_proxy_request(self, host, port, proxied_path, body):
 
         headers = self.proxy_request_headers()
-        mylog(f"_build_proxy_request: {headers}")
 
         client_uri = self.get_client_uri('http', host, port, proxied_path)
         # Some applications check X-Forwarded-Context and X-ProxyContextPath
         # headers to see if and where they are being proxied from.
         if not self.absolute_url:
             context_path = self._get_context_path(host, port)
+            mylog(f"_build_proxy_request: context_path: {context_path}")
             headers['X-Forwarded-Context'] = context_path
             headers['X-ProxyContextPath'] = context_path
             # to be compatible with flask/werkzeug wsgi applications
             headers['X-Forwarded-Prefix'] = context_path
+
+        mylog("_build_proxy_request: headers:")
+        mylog(headers)
 
         req = httpclient.HTTPRequest(
             client_uri, method=self.request.method, body=body,
@@ -235,6 +237,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
 
         client = httpclient.AsyncHTTPClient()
 
+        mylog(f"proxy: | {host} | {port} | {proxied_path}")
         req = self._build_proxy_request(host, port, proxied_path, body)
 
         try:
