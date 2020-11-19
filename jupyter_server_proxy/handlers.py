@@ -5,6 +5,7 @@ Some original inspiration from https://github.com/senko/tornado-proxy
 """
 
 import inspect
+import logging
 import socket
 import os
 from urllib.parse import urlunparse, urlparse, quote
@@ -20,8 +21,20 @@ from .utils import call_with_asked_args
 from .websocket import WebSocketHandlerMixin, pingable_ws_connect
 from simpervisor import SupervisedProcess
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    handlers=[
+        logging.FileHandler(filename='proxy2.log'),
+        logging.StreamHandler(stream=sys.stdout)
+    ]
+)
+proxy_logger = logging.getLogger('jupyter-server-proxy')
+proxy_logger.setLevel(logging.DEBUG)
+proxy_logger.debug("this is a debugging message.")
+
 def mylog(msg):
     '''Because we can't get at the log on binder.'''
+    proxy_logger.debug(msg)
     f = open('/tmp/proxy.log', 'a')
     f.write(msg)
     f.write('\n')
