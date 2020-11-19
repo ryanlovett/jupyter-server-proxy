@@ -26,22 +26,22 @@ from simpervisor import SupervisedProcess
 logging.basicConfig(
     level=logging.DEBUG,
     handlers=[
-        logging.FileHandler(filename='proxy2.log'),
-        logging.StreamHandler(stream=sys.stdout)
+        logging.FileHandler(filename='.jupyter-server-proxy.log'),
+        logging.StreamHandler(stream=sys.stderr)
     ]
 )
 proxy_logger = logging.getLogger('jupyter-server-proxy')
 proxy_logger.setLevel(logging.DEBUG)
 proxy_logger.debug("this is a debugging message.")
 
-def mylog(msg):
-    '''Because we can't get at the log on binder.'''
-    proxy_logger.debug(msg)
-    f = open('/tmp/proxy.log', 'a')
-    f.write(msg)
-    f.write('\n')
-    f.flush()
-    f.close()
+#def mylog(msg):
+#    '''Because we can't get at the log on binder.'''
+#    proxy_logger.debug(msg)
+#    f = open('/tmp/proxy.log', 'a')
+#    f.write(msg)
+#    f.write('\n')
+#    f.flush()
+#    f.close()
 
 class AddSlashHandler(IPythonHandler):
     """Add trailing slash to URLs that need them."""
