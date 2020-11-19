@@ -6,9 +6,11 @@ Some original inspiration from https://github.com/senko/tornado-proxy
 
 import inspect
 import logging
-import socket
 import os
+import socket
+import sys
 from urllib.parse import urlunparse, urlparse, quote
+
 import aiohttp
 from asyncio import Lock
 
