@@ -293,7 +293,6 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
                     self.add_header(header, v)
 
             if response.body:
-                proxy_logger.debug(f"writing response body: '{response.body}'")
                 self.write(response.body)
 
     async def proxy_open(self, host, port, proxied_path=''):
