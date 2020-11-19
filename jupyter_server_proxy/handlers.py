@@ -152,7 +152,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         - {base_url}/{proxy_base}
         """
         host_and_port = str(port) if host == 'localhost' else host + ":" + str(port)
-        mylog(f"_get_context_path: {host_and_port}")
+        proxy_logger.debug(f"_get_context_path: {host_and_port}")
         if self.proxy_base:
             return url_path_join(self.base_url, self.proxy_base)
         if self.absolute_url:
@@ -185,7 +185,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         if self.request.query:
             client_uri += '?' + self.request.query
 
-        mylog(f"get_client_uri: {client_uri}")
+        proxy_logger.debug(f"get_client_uri: {client_uri}")
         return client_uri
 
     def _build_proxy_request(self, host, port, proxied_path, body):
@@ -197,14 +197,14 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         # headers to see if and where they are being proxied from.
         if not self.absolute_url:
             context_path = self._get_context_path(host, port)
-            mylog(f"_build_proxy_request: context_path: {context_path}")
+            proxy_logger.debug(f"_build_proxy_request: context_path: {context_path}")
             headers['X-Forwarded-Context'] = context_path
             headers['X-ProxyContextPath'] = context_path
             # to be compatible with flask/werkzeug wsgi applications
             headers['X-Forwarded-Prefix'] = context_path
 
-        mylog("_build_proxy_request: headers:")
-        mylog(str(headers))
+        proxy_logger.debug("_build_proxy_request: headers:")
+        proxy_logger.debug(str(headers))
 
         req = httpclient.HTTPRequest(
             client_uri, method=self.request.method, body=body,
@@ -252,7 +252,8 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
 
         client = httpclient.AsyncHTTPClient()
 
-        mylog(f"proxy: | {host} | {port} | {proxied_path}")
+        proxy_logger.debug(f"host: {host} | port: {port} | proxied_path: {proxied_path}")
+        self.log.debug(f"sl proxy: host: {host} | port: {port} | proxied_path: {proxied_path}")
         req = self._build_proxy_request(host, port, proxied_path, body)
 
         try:
@@ -278,6 +279,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
             self.set_status(500)
             self.write(str(response.error))
         else:
+            proxy_logger.debug(f"setting response: '{response.code}' {response.reason}'")
             self.set_status(response.code, response.reason)
 
             # clear tornado default header
@@ -287,9 +289,11 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
                 if header not in ('Content-Length', 'Transfer-Encoding',
                                   'Content-Encoding', 'Connection'):
                     # some header appear multiple times, eg 'Set-Cookie'
+                    proxy_logger.debug(f"adding header: '{header}' '{v}'")
                     self.add_header(header, v)
 
             if response.body:
+                proxy_logger.debug(f"writing response body: '{response.body}'")
                 self.write(response.body)
 
     async def proxy_open(self, host, port, proxied_path=''):
