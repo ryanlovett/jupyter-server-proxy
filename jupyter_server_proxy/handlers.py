@@ -26,7 +26,6 @@ from simpervisor import SupervisedProcess
 logging.basicConfig(
     level=logging.DEBUG,
     handlers=[
-        logging.FileHandler(filename='.jupyter-server-proxy.log'),
         logging.StreamHandler(stream=sys.stderr)
     ]
 )
