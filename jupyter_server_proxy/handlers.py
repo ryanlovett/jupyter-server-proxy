@@ -20,6 +20,8 @@ from .utils import call_with_asked_args
 from .websocket import WebSocketHandlerMixin, pingable_ws_connect
 from simpervisor import SupervisedProcess
 
+# patch -- return a header name as-is, without changing case.
+httputil._normalize_header = lambda x: x
 
 class AddSlashHandler(JupyterHandler):
     """Add trailing slash to URLs that need them."""
