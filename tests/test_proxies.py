@@ -90,7 +90,7 @@ def test_server_proxy_non_absolute():
     s = r.read().decode('ascii')
     assert s.startswith('GET /abc?token=')
     assert 'X-Forwarded-Context: /python-http\n' in s
-    assert 'X-Proxycontextpath: /python-http\n' in s
+    assert 'X-ProxyContextPath: /python-http\n' in s
 
 
 def test_server_proxy_absolute():
@@ -99,7 +99,7 @@ def test_server_proxy_absolute():
     s = r.read().decode('ascii')
     assert s.startswith('GET /python-http-abs/def?token=')
     assert 'X-Forwarded-Context' not in s
-    assert 'X-Proxycontextpath' not in s
+    assert 'X-ProxyContextPath' not in s
 
 
 def test_server_proxy_requested_port():
@@ -108,7 +108,7 @@ def test_server_proxy_requested_port():
     s = r.read().decode('ascii')
     assert s.startswith('GET /ghi?token=')
     assert 'X-Forwarded-Context: /python-http-port54321\n' in s
-    assert 'X-Proxycontextpath: /python-http-port54321\n' in s
+    assert 'X-ProxyContextPath: /python-http-port54321\n' in s
 
     direct = request_get(54321, '/ghi', TOKEN)
     assert direct.code == 200
@@ -120,7 +120,7 @@ def test_server_proxy_port_non_absolute():
     s = r.read().decode('ascii')
     assert s.startswith('GET /jkl?token=')
     assert 'X-Forwarded-Context: /proxy/54321\n' in s
-    assert 'X-Proxycontextpath: /proxy/54321\n' in s
+    assert 'X-ProxyContextPath: /proxy/54321\n' in s
 
 
 def test_server_proxy_port_absolute():
@@ -129,7 +129,7 @@ def test_server_proxy_port_absolute():
     s = r.read().decode('ascii')
     assert s.startswith('GET /proxy/absolute/54321/nmo?token=')
     assert 'X-Forwarded-Context' not in s
-    assert 'X-Proxycontextpath' not in s
+    assert 'X-ProxyContextPath' not in s
 
 
 @pytest.mark.parametrize(
@@ -145,7 +145,7 @@ def test_server_proxy_mappath_dict(requestpath, expected):
     s = r.read().decode('ascii')
     assert s.startswith('GET ' + expected)
     assert 'X-Forwarded-Context: /python-http-mappath\n' in s
-    assert 'X-Proxycontextpath: /python-http-mappath\n' in s
+    assert 'X-ProxyContextPath: /python-http-mappath\n' in s
 
 
 @pytest.mark.parametrize(
@@ -161,7 +161,7 @@ def test_server_proxy_mappath_callable(requestpath, expected):
     s = r.read().decode('ascii')
     assert s.startswith('GET ' + expected)
     assert 'X-Forwarded-Context: /python-http-mappathf\n' in s
-    assert 'X-Proxycontextpath: /python-http-mappathf\n' in s
+    assert 'X-ProxyContextPath: /python-http-mappathf\n' in s
 
 
 def test_server_proxy_remote():
