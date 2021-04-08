@@ -168,7 +168,9 @@ class ProxyHandler(WebSocketHandlerMixin, JupyterHandler):
 
         headers = self.proxy_request_headers()
 
-        client_uri = self.get_client_uri('http', host, port, proxied_path)
+        client_uri = self.get_client_uri(
+            self.get_http_protocol(), host, port, proxied_path
+        )
         # Some applications check X-Forwarded-Context and X-ProxyContextPath
         # headers to see if and where they are being proxied from.
         if not self.absolute_url:
@@ -188,6 +190,10 @@ class ProxyHandler(WebSocketHandlerMixin, JupyterHandler):
             return self.host_allowlist(self, host)
         else:
             return host in self.host_allowlist
+
+    def get_http_protocol(self):
+        """HTTP protocol to use when connecting to server."""
+        return "http"
 
     @web.authenticated
     async def proxy(self, host, port, proxied_path):

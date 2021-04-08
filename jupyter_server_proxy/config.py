@@ -16,7 +16,7 @@ try:
 except ImportError:
     from .utils import Callable
 
-def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port, mappath):
+def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port, mappath, http_protocol):
     """
     Create a SuperviseAndProxyHandler subclass with given parameters
     """
@@ -66,6 +66,9 @@ def _make_serverproxy_handler(name, command, environment, timeout, absolute_url,
         def get_timeout(self):
             return timeout
 
+        def get_http_protocol(self):
+            return http_protocol
+
     return _Proxy
 
 
@@ -91,6 +94,7 @@ def make_handlers(base_url, server_processes):
             sp.absolute_url,
             sp.port,
             sp.mappath,
+            sp.http_protocol,
         )
         handlers.append((
             ujoin(base_url, sp.name, r'(.*)'), handler, dict(state={}),
@@ -102,7 +106,7 @@ def make_handlers(base_url, server_processes):
 
 LauncherEntry = namedtuple('LauncherEntry', ['enabled', 'icon_path', 'title'])
 ServerProcess = namedtuple('ServerProcess', [
-    'name', 'command', 'environment', 'timeout', 'absolute_url', 'port', 'mappath', 'launcher_entry', 'new_browser_tab'])
+    'name', 'command', 'environment', 'timeout', 'absolute_url', 'port', 'mappath', 'launcher_entry', 'new_browser_tab', 'http_protocol'])
 
 def make_server_process(name, server_process_config):
     le = server_process_config.get('launcher_entry', {})
@@ -120,6 +124,7 @@ def make_server_process(name, server_process_config):
             title=le.get('title', name)
         ),
         new_browser_tab=server_process_config.get('new_browser_tab', True)
+        http_protocol=server_process_config.get('http_protocol', 'http'),
     )
 
 class ServerProxy(Configurable):
@@ -179,6 +184,9 @@ class ServerProxy(Configurable):
           new_browser_tab
             Set to True (default) to make the proxied server interface opened as a new browser tab. Set to False
             to have it open a new JupyterLab tab. This has no effect in classic notebook.
+
+          http_protocol
+            HTTP protocol used when communicating with proxied server. The default is 'http' though some servers may need 'https'.
         """,
         config=True
     )
