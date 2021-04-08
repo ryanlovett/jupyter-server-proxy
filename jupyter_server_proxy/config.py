@@ -123,8 +123,8 @@ def make_server_process(name, server_process_config):
             icon_path=le.get('icon_path'),
             title=le.get('title', name)
         ),
-        new_browser_tab=server_process_config.get('new_browser_tab', True)
-        http_protocol=server_process_config.get('http_protocol', 'http'),
+        new_browser_tab=server_process_config.get('new_browser_tab', True),
+        http_protocol=server_process_config.get('http_protocol', 'http')
     )
 
 class ServerProxy(Configurable):
