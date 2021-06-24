@@ -112,7 +112,7 @@ def make_handlers(base_url, server_processes):
 
 LauncherEntry = namedtuple('LauncherEntry', ['enabled', 'icon_path', 'title'])
 ServerProcess = namedtuple('ServerProcess', [
-    'name', 'command', 'environment', 'timeout', 'absolute_url', 'port', 'mappath', 'launcher_entry', 'new_browser_tab', 'request_headers_override, http_protocol'])
+    'name', 'command', 'environment', 'timeout', 'absolute_url', 'port', 'mappath', 'launcher_entry', 'new_browser_tab', 'request_headers_override', 'http_protocol'])
 
 def make_server_process(name, server_process_config):
     le = server_process_config.get('launcher_entry', {})
