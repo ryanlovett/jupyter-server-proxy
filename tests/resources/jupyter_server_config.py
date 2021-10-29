@@ -27,7 +27,19 @@ c.ServerProxy.servers = {
     },
     'python-websocket' : {
         'command': ['python3', './tests/resources/websocket.py', '--port={port}'],
-    }
+        'request_headers_override': {
+            'X-Custom-Header': 'pytest-23456',
+        }
+    },
+    'python-request-headers': {
+        'command': ['python3', './tests/resources/httpinfo.py', '{port}'],
+        'request_headers_override': {
+            'X-Custom-Header': 'pytest-23456',
+        }
+    },
+    'python-gzipserver': {
+        'command': ['python3', './tests/resources/gzipserver.py', '{port}'],
+    },
 }
 
 c.ServerProxy.non_service_rewrite_response = \
@@ -35,5 +47,6 @@ c.ServerProxy.non_service_rewrite_response = \
 
 import sys
 sys.path.append('./tests/resources')
+c.ServerApp.jpserver_extensions = { 'proxyextension': True }
 c.NotebookApp.nbserver_extensions = { 'proxyextension': True }
 #c.Application.log_level = 'DEBUG'

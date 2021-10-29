@@ -1,9 +1,10 @@
 """
 Traitlets based configuration for jupyter_server_proxy
 """
-from notebook.utils import url_path_join as ujoin
-from traitlets import Dict, List, Union, default
+from jupyter_server.utils import url_path_join as ujoin
+from traitlets import Dict, List, Union, default, observe
 from traitlets.config import Configurable
+from warnings import warn
 from .handlers import SuperviseAndProxyHandler, AddSlashHandler
 import pkg_resources
 from collections import namedtuple
@@ -15,7 +16,7 @@ try:
 except ImportError:
     from .utils import Callable
 
-def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port, mappath, rewrite_response):
+def _make_serverproxy_handler(name, command, environment, timeout, absolute_url, port, mappath, request_headers_override, rewrite_response):
     """
     Create a SuperviseAndProxyHandler subclass with given parameters
     """
@@ -51,17 +52,22 @@ def _make_serverproxy_handler(name, command, environment, timeout, absolute_url,
             else:
                 raise ValueError('Value of unrecognized type {}'.format(type(value)))
 
+        def _realize_rendered_template(self, attribute):
+            '''Call any callables, then render any templated values.'''
+            if callable(attribute):
+                attribute = self._render_template(
+                    call_with_asked_args(attribute, self.process_args)
+                )
+            return self._render_template(attribute)
+
         def get_cmd(self):
-            if callable(command):
-                return self._render_template(call_with_asked_args(command, self.process_args))
-            else:
-                return self._render_template(command)
+            return self._realize_rendered_template(command)
 
         def get_env(self):
-            if callable(environment):
-                return self._render_template(call_with_asked_args(environment, self.process_args))
-            else:
-                return self._render_template(environment)
+            return self._realize_rendered_template(environment)
+
+        def get_request_headers_override(self):
+            return self._realize_rendered_template(request_headers_override)
 
         def get_timeout(self):
             return timeout
@@ -93,6 +99,7 @@ def make_handlers(base_url, server_processes):
             sp.absolute_url,
             sp.port,
             sp.mappath,
+            sp.request_headers_override,
             sp.rewrite_response,
         )
         handlers.append((
@@ -103,10 +110,11 @@ def make_handlers(base_url, server_processes):
         ))
     return handlers
 
-LauncherEntry = namedtuple('LauncherEntry', ['enabled', 'icon_path', 'title'])
+LauncherEntry = namedtuple('LauncherEntry', ['enabled', 'icon_path', 'title', 'path_info'])
 ServerProcess = namedtuple('ServerProcess', [
     'name', 'command', 'environment', 'timeout', 'absolute_url', 'port',
-    'mappath', 'launcher_entry', 'new_browser_tab', 'rewrite_response',
+    'mappath', 'launcher_entry', 'new_browser_tab', 'request_headers_override',
+    'rewrite_response'
 ])
 
 def make_server_process(name, server_process_config, serverproxy_config):
@@ -122,9 +130,13 @@ def make_server_process(name, server_process_config, serverproxy_config):
         launcher_entry=LauncherEntry(
             enabled=le.get('enabled', True),
             icon_path=le.get('icon_path'),
-            title=le.get('title', name)
+            title=le.get('title', name),
+            path_info=le.get('path_info', name + "/")
         ),
         new_browser_tab=server_process_config.get('new_browser_tab', True),
+        request_headers_override=server_process_config.get(
+            'request_headers_override', {}
+        ),
         rewrite_response=server_process_config.get(
             'rewrite_response',
             lambda host, port, path, response: response.body
@@ -149,8 +161,8 @@ class ServerProxy(Configurable):
             Could also be a callable. It should return a list.
 
           environment
-            A dictionary of environment variable mappings. {{port}} and {{base_url}} will be
-            substituted as for command.
+            A dictionary of environment variable mappings. As with the command
+            traitlet, {{port}} and {{base_url}} will be substituted.
 
             Could also be a callable. It should return a dictionary.
 
@@ -189,6 +201,14 @@ class ServerProxy(Configurable):
             Set to True (default) to make the proxied server interface opened as a new browser tab. Set to False
             to have it open a new JupyterLab tab. This has no effect in classic notebook.
 
+          request_headers_override
+            A dictionary of additional HTTP headers for the proxy request. As with
+            the command traitlet, {{port}} and {{base_url}} will be substituted.
+
+          path_info
+            The trailing path that is appended to the user's server URL to access the proxied server.
+            By default it is the name of the server followed by a trailing slash.
+
           rewrite_response
             An optional function to rewrite the response for the given service.
             Input arguments are ``host`` which is ``"localhost"``, the service
@@ -215,7 +235,7 @@ class ServerProxy(Configurable):
         config=True
     )
 
-    host_whitelist = Union(
+    host_allowlist = Union(
         trait_types=[List(), Callable()],
         help="""
         List of allowed hosts.
@@ -228,16 +248,40 @@ class ServerProxy(Configurable):
         some external service.  Here is an example that could be placed in a
         site-wide Jupyter notebook config:
 
-            def host_whitelist(handler, host):
+            def host_allowlist(handler, host):
                 handler.log.info("Request to proxy to host " + host)
                 return host.startswith("10.")
-            c.ServerProxy.host_whitelist = host_whitelist
+            c.ServerProxy.host_allowlist = host_allowlist
 
         Defaults to a list of ["localhost", "127.0.0.1"].
         """,
         config=True
     )
 
-    @default("host_whitelist")
-    def _host_whitelist_default(self):
+    @default("host_allowlist")
+    def _host_allowlist_default(self):
         return ["localhost", "127.0.0.1"]
+
+    host_whitelist = Union(
+        trait_types=[List(), Callable()],
+        help="Deprecated, use host_allowlist",
+        config=True)
+
+    @observe("host_whitelist")
+    def _host_whitelist_deprecated(self, change):
+        old_attr = change.name
+        if self.host_allowlist != change.new:
+            # only warn if different
+            # protects backward-compatible config from warnings
+            # if they set the same value under both names
+            # Configurable doesn't have a log
+            # https://github.com/ipython/traitlets/blob/5.0.5/traitlets/config/configurable.py#L181
+            warn(
+                "{cls}.{old} is deprecated in jupyter-server-proxy {version}, use {cls}.{new} instead".format(
+                    cls=self.__class__.__name__,
+                    old=old_attr,
+                    new="host_allowlist",
+                    version="3.0.0",
+                )
+            )
+            self.host_allowlist = change.new

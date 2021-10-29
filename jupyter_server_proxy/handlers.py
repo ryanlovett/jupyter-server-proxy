@@ -13,15 +13,15 @@ from asyncio import Lock
 
 from tornado import gen, web, httpclient, httputil, process, websocket, ioloop, version_info
 
-from notebook.utils import url_path_join
-from notebook.base.handlers import IPythonHandler, utcnow
+from jupyter_server.utils import ensure_async, url_path_join
+from jupyter_server.base.handlers import JupyterHandler, utcnow
 
 from .utils import call_with_asked_args
 from .websocket import WebSocketHandlerMixin, pingable_ws_connect
 from simpervisor import SupervisedProcess
 
 
-class AddSlashHandler(IPythonHandler):
+class AddSlashHandler(JupyterHandler):
     """Add trailing slash to URLs that need them."""
     @web.authenticated
     def get(self, *args):
@@ -29,7 +29,7 @@ class AddSlashHandler(IPythonHandler):
         dest = src._replace(path=src.path + '/')
         self.redirect(urlunparse(dest))
 
-class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
+class ProxyHandler(WebSocketHandlerMixin, JupyterHandler):
     """
     A tornado request handler that proxies HTTP and websockets from
     a given host/port combination. This class is not meant to be
@@ -123,23 +123,26 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         """
         self.settings['api_last_activity'] = utcnow()
 
-    def _get_context_path(self, port):
+    def _get_context_path(self, host, port):
         """
         Some applications need to know where they are being proxied from.
         This is either:
         - {base_url}/proxy/{port}
+        - {base_url}/proxy/{host}:{port}
         - {base_url}/proxy/absolute/{port}
+        - {base_url}/proxy/absolute/{host}:{port}
         - {base_url}/{proxy_base}
         """
+        host_and_port = str(port) if host == 'localhost' else host + ":" + str(port)
         if self.proxy_base:
             return url_path_join(self.base_url, self.proxy_base)
         if self.absolute_url:
-            return url_path_join(self.base_url, 'proxy', 'absolute', str(port))
+            return url_path_join(self.base_url, 'proxy', 'absolute', host_and_port)
         else:
-            return url_path_join(self.base_url, 'proxy', str(port))
+            return url_path_join(self.base_url, 'proxy', host_and_port)
 
     def get_client_uri(self, protocol, host, port, proxied_path):
-        context_path = self._get_context_path(port)
+        context_path = self._get_context_path(host, port)
         if self.absolute_url:
             client_path = url_path_join(context_path, proxied_path)
         else:
@@ -173,20 +176,23 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         # Some applications check X-Forwarded-Context and X-ProxyContextPath
         # headers to see if and where they are being proxied from.
         if not self.absolute_url:
-            context_path = self._get_context_path(port)
+            context_path = self._get_context_path(host, port)
             headers['X-Forwarded-Context'] = context_path
             headers['X-ProxyContextPath'] = context_path
+            # to be compatible with flask/werkzeug wsgi applications
+            headers['X-Forwarded-Prefix'] = context_path
 
         req = httpclient.HTTPRequest(
             client_uri, method=self.request.method, body=body,
+            decompress_response=False,
             headers=headers, **self.proxy_request_options())
         return req
 
-    def _check_host_whitelist(self, host):
-        if callable(self.host_whitelist):
-            return self.host_whitelist(self, host)
+    def _check_host_allowlist(self, host):
+        if callable(self.host_allowlist):
+            return self.host_allowlist(self, host)
         else:
-            return host in self.host_whitelist
+            return host in self.host_allowlist
 
     @web.authenticated
     async def proxy(self, host, port, proxied_path):
@@ -197,9 +203,9 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
             {base_url}/{proxy_base}/{proxied_path}
         '''
 
-        if not self._check_host_whitelist(host):
+        if not self._check_host_allowlist(host):
             self.set_status(403)
-            self.write("Host '{host}' is not whitelisted. "
+            self.write("Host '{host}' is not allowed. "
                        "See https://jupyter-server-proxy.readthedocs.io/en/latest/arbitrary-ports-hosts.html for info.".format(host=host))
             return
 
@@ -256,7 +262,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
 
             for header, v in response.headers.get_all():
                 if header not in ('Content-Length', 'Transfer-Encoding',
-                                  'Content-Encoding', 'Connection'):
+                                  'Connection'):
                     # some header appear multiple times, eg 'Set-Cookie'
                     self.add_header(header, v)
 
@@ -274,9 +280,9 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         set up a callback to relay messages through.
         """
 
-        if not self._check_host_whitelist(host):
+        if not self._check_host_allowlist(host):
             self.set_status(403)
-            self.log.info("Host '{host}' is not whitelisted. "
+            self.log.info("Host '{host}' is not allowed. "
                           "See https://jupyter-server-proxy.readthedocs.io/en/latest/arbitrary-ports-hosts.html for info.".format(host=host))
             self.close()
             return
@@ -285,9 +291,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
             proxied_path = '/' + proxied_path
 
         client_uri = self.get_client_uri('ws', host, port, proxied_path)
-        headers = self.request.headers
-        current_loop = ioloop.IOLoop.current()
-        ws_connected = current_loop.asyncio_loop.create_future()
+        headers = self.proxy_request_headers()
 
         def message_cb(message):
             """
@@ -319,21 +323,25 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
             self.ws = await pingable_ws_connect(request=request,
                 on_message_callback=message_cb, on_ping_callback=ping_cb,
                 subprotocols=self.subprotocols)
-            ws_connected.set_result(True)
             self._record_activity()
             self.log.info('Websocket connection established to {}'.format(client_uri))
 
-        current_loop.add_callback(start_websocket_connection)
         # Wait for the WebSocket to be connected before resolving.
         # Otherwise, messages sent by the client before the
         # WebSocket successful connection would be dropped.
-        await ws_connected
-
+        await start_websocket_connection()
 
     def proxy_request_headers(self):
         '''A dictionary of headers to be used when constructing
         a tornado.httpclient.HTTPRequest instance for the proxy request.'''
-        return self.request.headers.copy()
+        headers = self.request.headers.copy()
+        # Merge any manually configured request headers
+        headers.update(self.get_request_headers_override())
+        return headers
+
+    def get_request_headers_override(self):
+        '''Add additional request headers. Typically overridden in subclasses.'''
+        return {}
 
     def proxy_request_options(self):
         '''A dictionary of options to be used when constructing
@@ -352,7 +360,7 @@ class ProxyHandler(WebSocketHandlerMixin, IPythonHandler):
         '''Select a single Sec-WebSocket-Protocol during handshake.'''
         self.subprotocols = subprotocols
         if isinstance(subprotocols, list) and subprotocols:
-            self.log.info('Client sent subprotocols: {}'.format(subprotocols))
+            self.log.debug('Client sent subprotocols: {}'.format(subprotocols))
             return subprotocols[0]
         return super().select_subprotocol(subprotocols)
 
@@ -394,7 +402,6 @@ class LocalProxyHandler(ProxyHandler):
     def proxy(self, port, proxied_path):
         return super().proxy('localhost', port, proxied_path)
 
-
 class RemoteProxyHandler(ProxyHandler):
     """
     A tornado request handler that proxies HTTP and websockets
@@ -431,7 +438,6 @@ class RemoteProxyHandler(ProxyHandler):
 
     def proxy(self, host, port, proxied_path):
         return super().proxy(host, port, proxied_path)
-
 
 # FIXME: Move this to its own file. Too many packages now import this from nbrserverproxy.handlers
 class SuperviseAndProxyHandler(LocalProxyHandler):
@@ -502,14 +508,14 @@ class SuperviseAndProxyHandler(LocalProxyHandler):
         # FIXME: Make sure this times out properly?
         # Invariant here should be: when lock isn't being held, either 'proc' is in state &
         # running, or not.
-        with (await self.state['proc_lock']):
+        async with self.state['proc_lock']:
             if 'proc' not in self.state:
                 # FIXME: Prevent races here
                 # FIXME: Handle graceful exits of spawned processes here
                 cmd = self.get_cmd()
-                server_env = os.environ.copy()
 
                 # Set up extra environment variables for process
+                server_env = os.environ.copy()
                 server_env.update(self.get_env())
 
                 timeout = self.get_timeout()
@@ -543,11 +549,11 @@ class SuperviseAndProxyHandler(LocalProxyHandler):
 
         await self.ensure_process()
 
-        return await super().proxy(self.port, path)
+        return await ensure_async(super().proxy(self.port, path))
 
 
     async def http_get(self, path):
-        return await self.proxy(self.port, path)
+        return await ensure_async(self.proxy(self.port, path))
 
     async def open(self, path):
         await self.ensure_process()
