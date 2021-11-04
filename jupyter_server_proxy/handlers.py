@@ -46,7 +46,7 @@ class ProxyHandler(WebSocketHandlerMixin, JupyterHandler):
         self.host_allowlist = kwargs.pop('host_allowlist', ['localhost', '127.0.0.1'])
         self.rewrite_response = kwargs.pop(
             'rewrite_response',
-            lambda host, port, path, response: response.body
+            lambda host, port, path, response: {}
         )
         self.subprotocols = None
         super().__init__(*args, **kwargs)
@@ -255,22 +255,39 @@ class ProxyHandler(WebSocketHandlerMixin, JupyterHandler):
             self.set_status(500)
             self.write(str(response.error))
         else:
-            self.set_status(response.code, response.reason)
+            # self.rewrite_response returns a dict of 'status', 'headers', and
+            # 'body'. The function definition is
+            #   lambda host, port, path, response: {}
+            # unless overridden in configuration.
+            rewritten_response = self.rewrite_response(
+                host, port, proxied_path, response
+            )
+            self.log.debug(f"rewritten response: {rewritten_response}")
+            ## status
+            response_status = rewritten_response.get(
+                'status', (response.code, response.reason)
+            )
+            self.set_status(*response_status)
+
+            ## headers
 
             # clear tornado default header
             self._headers = httputil.HTTPHeaders()
 
-            for header, v in response.headers.get_all():
+            response_headers = rewritten_response.get(
+                'headers', response.headers.get_all()
+            )
+            for header, v in response_headers:
                 if header not in ('Content-Length', 'Transfer-Encoding',
                                   'Connection'):
                     # some header appear multiple times, eg 'Set-Cookie'
                     self.add_header(header, v)
 
-            if response.body:
-                # Note: self.rewrite_response is defined as
-                #   lambda host, port, path, response: response.body
-                # unless overridden in configuration.
-                self.write(self.rewrite_response(host, port, proxied_path, response))
+
+            ## body
+            response_body = rewritten_response.get('body', response.body)
+            if response_body:
+                self.write(response_body)
 
     async def proxy_open(self, host, port, proxied_path=''):
         """
