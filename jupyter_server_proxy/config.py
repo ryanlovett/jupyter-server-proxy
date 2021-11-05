@@ -136,7 +136,7 @@ def make_server_process(name, server_process_config, serverproxy_config):
         request_headers_override=server_process_config.get('request_headers_override', {}),
         rewrite_response=server_process_config.get(
             'rewrite_response',
-            lambda host, port, path, response: {}
+            lambda host, base_url, port, path, response: {}
         ),
     )
 
@@ -208,9 +208,10 @@ class ServerProxy(Configurable):
 
           rewrite_response
             An optional function to rewrite the response for the given service.
-            Input arguments are ``host`` which is ``"localhost"``, the service
-            port ``port``, the ``path`` from the requested URL, and
-            ``response`` is a `tornado.httpclient.HTTPResponse object
+			Input arguments are ``host`` which is ``"localhost"``, the jupyter
+			server's base URL ``base_url``, the service port ``port``, the
+			``path`` from the requested URL, and ``response`` is a
+            `tornado.httpclient.HTTPResponse object
             <https://www.tornadoweb.org/en/stable/httpclient.html#response-objects>`.
             Output is a dictionary with optional keys for "code", "reason", "headers", and "body". If a key is unspecified, the corresponding response value will not be altered. The value types match those in a `tornado.httpclient.HTTPResponse` object.
             Defaults to ``lambda host, port, path, response: {}``.
@@ -227,7 +228,7 @@ class ServerProxy(Configurable):
         "response" is a `tornado.httpclient.HTTPResponse object
         <https://www.tornadoweb.org/en/stable/httpclient.html#response-objects>`.
         See the description for ``rewrite_response`` for more information.
-        Defaults to ``lambda host, port, path, response: {}``.
+        Defaults to ``lambda host, base_url, port, path, response: {}``.
         """,
         config=True
     )
