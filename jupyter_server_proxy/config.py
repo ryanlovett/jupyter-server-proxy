@@ -212,7 +212,7 @@ class ServerProxy(Configurable):
             port ``port``, the ``path`` from the requested URL, and
             ``response`` is a `tornado.httpclient.HTTPResponse object
             <https://www.tornadoweb.org/en/stable/httpclient.html#response-objects>`.
-            Output is a dictionary with optional keys for "status", "headers", and "body". If a key is unspecified, the corresponding response value will not be altered. For status, return a tuple containing the response code and reason. For header, return a dictionary. For the body, return bytes.
+            Output is a dictionary with optional keys for "code", "reason", "headers", and "body". If a key is unspecified, the corresponding response value will not be altered. The value types match those in a `tornado.httpclient.HTTPResponse` object.
             Defaults to ``lambda host, port, path, response: {}``.
         """,
         config=True

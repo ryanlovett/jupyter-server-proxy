@@ -255,34 +255,30 @@ class ProxyHandler(WebSocketHandlerMixin, JupyterHandler):
             self.set_status(500)
             self.write(str(response.error))
         else:
-            # self.rewrite_response returns a dict of 'status', 'headers', and
-            # 'body'. The function definition is
+            # self.rewrite_response returns a dict of 'code', 'reason',
+            # 'headers', and 'body'. The function definition is
             #   lambda host, port, path, response: {}
             # unless overridden in configuration.
             rewritten_response = self.rewrite_response(
                 host, port, proxied_path, response
             )
-            self.log.debug(f"rewritten response: {rewritten_response}")
+
             ## status
-            response_status = rewritten_response.get(
-                'status', (response.code, response.reason)
-            )
-            self.set_status(*response_status)
+            response_code = rewritten_response.get('code', response.code)
+            response_reason = rewritten_response.get('reason', response.reason)
+            self.set_status(response_code, response_reason)
 
             ## headers
-
+            response_headers = rewritten_response.get(
+                'headers', response.headers
+            )
             # clear tornado default header
             self._headers = httputil.HTTPHeaders()
-
-            response_headers = rewritten_response.get(
-                'headers', response.headers.get_all()
-            )
-            for header, v in response_headers:
+            for header, v in response_headers.get_all():
                 if header not in ('Content-Length', 'Transfer-Encoding',
                                   'Connection'):
                     # some header appear multiple times, eg 'Set-Cookie'
                     self.add_header(header, v)
-
 
             ## body
             response_body = rewritten_response.get('body', response.body)
