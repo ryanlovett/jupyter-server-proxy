@@ -8,6 +8,14 @@ def translate_ciao(response):
 def bar_to_foo(response):
     response.body = response.body.replace(b"bar", b"foo")
 
+def rewrite_headers(response, request, orig_response, host, port, path):
+    # make up a header and arbitrarily set it to one of the kwargs
+    response.headers['X-Rewrite-Headers'] = path
+
+def rewrite_status(response):
+    response.code = 202
+    response.reason = 'i have my reasons'
+
 c.ServerProxy.servers = {
     'python-http': {
         'command': ['python3', './tests/resources/httpinfo.py', '{port}'],
@@ -48,6 +56,10 @@ c.ServerProxy.servers = {
     'python-http-rewrite-response': {
         'command': ['python3', './tests/resources/httpinfo.py', '{port}'],
         'rewrite_response': translate_ciao,
+    },
+    'python-http-rewrite-response-more': {
+        'command': ['python3', './tests/resources/httpinfo.py', '{port}'],
+        'rewrite_response': [rewrite_headers, rewrite_status],
     },
 }
 

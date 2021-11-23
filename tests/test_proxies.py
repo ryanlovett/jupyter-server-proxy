@@ -93,6 +93,13 @@ def test_server_rewrite_response():
     assert s.startswith('GET /hello-a-tutti?token=')
 
 
+def test_server_rewrite_response_more():
+    r = request_get(PORT, '/python-http-rewrite-response-more/', TOKEN)
+    assert r.code == 202
+    assert r.reason == 'i have my reasons'
+    assert 'X-Rewrite-Headers' in r.headers
+
+
 def test_server_proxy_non_absolute():
     r = request_get(PORT, '/python-http/abc', TOKEN)
     assert r.code == 200
